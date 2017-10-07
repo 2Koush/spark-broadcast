@@ -1,0 +1,13 @@
+{
+  "_id": "utils@0.1",
+  "_inCache": true,
+  "_location": "/utils",
+  "_nodeVersion": "4.7.3",
+  "_npmVersion": "2.15.11",
+  "description": "Utilities when creating Cisco Spark Bots",
+  "license": "MIT",
+  "main": "utils.js",
+  "name": "utils",
+  "readme": "ERROR: No README data found!",
+  "version": "0.1"
+}
