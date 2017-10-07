@@ -1,0 +1,41 @@
+{
+  "name": "broadcast-bot-ciscospark",
+  "version": "0.0.1",
+  "description": "A Cisco Spark bot built using Botkit framework for broadcasting messages to a large user base.",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "dependencies": {
+    "body-parser": "^1.15.2",
+    "botkit": "^0.5",
+    "botkit-middleware-watson": "^1.4.0",
+    "botkit-storage-mongo": "^1.0.7",
+    "dashbot": "0.7.4",
+    "debug": "^2.6.0",
+    "express": "^4.14.0",
+    "limiter": "^1.1.2",
+    "log": "^1.4.0",
+    "node-env-file": "^0.1.8",
+    "request": "^2.79.0",
+    "wordfilter": "^0.2.6"
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/2Koush/spark-broadcast.git"
+  },
+  "bugs": {
+    "url": "https://github.com/2Koush/spark-broadcast/issues"
+  },
+  "homepage": "https://github.com/2Koush/spark-broadcast",
+  "keywords": [
+    "bots",
+    "chatbots",
+    "Cisco Spark",
+    "fabian",
+    "broadcast"
+  ],
+  "author": "koramamu@cisco.com",
+  "license": "ISC"
+}
