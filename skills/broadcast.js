@@ -20,136 +20,141 @@ module.exports = function(controller, limiter) {
 
     //EXPORT
     controller.hears(['^\/export'], 'direct_mention', function (bot, message) {
-        controller.logger.info("/export");
+        controller.logger.info(message.channel + ": /export");
         isPublisher(message, controller.storage).then(function() {
             sparkUtils.isMessageFromModerator(message).then(function(moderator) {
                 if (moderator) broadcast.exportStorage(bot, message);
             });
         }).catch(function(){
-            controller.logger.error("/export: This space is not initalized. If you want my annoucements, message me directly.")
+            controller.logger.error(message.channel + ": /export: This space is not initalized. If you want my annoucements, message me directly.")
             bot.reply(message, "This space is not initalized. If you want my annoucements, message me directly.")
         });
     });
 
     //IMPORT
     controller.hears(['^\/import'], 'direct_mention', function (bot, message) {
-        controller.logger.info("/import");
+        controller.logger.info(message.channel + ": /import");
         isPublisher(message, controller.storage).then(function() {
             sparkUtils.isMessageFromModerator(message).then(function(moderator) {
                 if (moderator) broadcast.importStorage(bot, message);
             });
         }).catch(function(){
-            controller.logger.error("/import: This space is not initalized. If you want my annoucements, message me directly.")
+            controller.logger.error(message.channel + ": /import: This space is not initalized. If you want my annoucements, message me directly.")
             bot.reply(message, "This space is not initalized. If you want my annoucements, message me directly.")
         });
     });
 
 	//PUBLISH
 	controller.hears(['^\/publish\/all'], 'direct_mention', function (bot, message) {
-        controller.logger.info("/publish/all");
+        controller.logger.info(message.channel + ": /publish/all");
         console.log("/publish/all")
         isPublisher(message, controller.storage).then(function() {
     		sparkUtils.isMessageFromModerator(message).then(function(moderator) {
     			if (moderator) broadcast.publish(bot, message, 0, false);
     		});
         }).catch(function(){
-            controller.logger.error("/publish: This space is not initalized. If you want my annoucements, message me directly.")
+            controller.logger.error(message.channel + ": /publish: This space is not initalized. If you want my annoucements, message me directly.")
             bot.reply(message, "This space is not initalized. If you want my annoucements, message me directly.")
         });
 	});
 
     //PUBLISH INTERNAL
     controller.hears(['^\/publish\/internal'], 'direct_mention', function (bot, message) {
-        controller.logger.info("/publish/internal");
+        controller.logger.info(message.channel + ": /publish/internal");
         console.log("/publish/internal")
         isPublisher(message, controller.storage).then(function() {
             sparkUtils.isMessageFromModerator(message).then(function(moderator) {
                 if (moderator) broadcast.publish(bot, message, 1, false);
             });
         }).catch(function(){
-            controller.logger.error("/publish: This space is not initalized. If you want my annoucements, message me directly.")
+            controller.logger.error(message.channel + ": /publish: This space is not initalized. If you want my annoucements, message me directly.")
             bot.reply(message, "This space is not initalized. If you want my annoucements, message me directly.")
         });
     });
 
     //PUBLISH EXTERNAL
     controller.hears(['^\/publish\/external'], 'direct_mention', function (bot, message) {
-        controller.logger.info("/publish/external");
+        controller.logger.info(message.channel + ": /publish/external");
         console.log("/publish/external")
         isPublisher(message, controller.storage).then(function() {
             sparkUtils.isMessageFromModerator(message).then(function(moderator) {
                 if (moderator) broadcast.publish(bot, message, 2, false);
             });
         }).catch(function(){
-            controller.logger.error("/publish: This space is not initalized. If you want my annoucements, message me directly.")
+            controller.logger.error(message.channel + ": /publish: This space is not initalized. If you want my annoucements, message me directly.")
             bot.reply(message, "This space is not initalized. If you want my annoucements, message me directly.")
         });
     });
 
 	//KILL
 	controller.hears(['^\/kill'], 'direct_mention', function (bot, message) {
-        controller.logger.info("/kill");
+        controller.logger.info(message.channel + ": /kill");
         isPublisher(message, controller.storage).then(function() {
     		sparkUtils.isMessageFromModerator(message).then(function(moderator) {
     			if (moderator) broadcast.kill(bot, message);
     		});
         }).catch(function(){
-            controller.logger.error("/kill: This space is not initalized. If you want my annoucements, message me directly.")
+            controller.logger.error(message.channel + ": /kill: This space is not initalized. If you want my annoucements, message me directly.")
             bot.reply(message, "This space is not initalized. If you want my annoucements, message me directly.")
         });
 	});
 
 	//LIST
 	controller.hears(['^\/list'], 'direct_mention', function (bot, message) {
-        controller.logger.info("/list");
+        controller.logger.info(message.channel + ": /list");
         isPublisher(message, controller.storage).then(function() {
     		console.log("list command: " + message);
     		broadcast.list(bot, message);
         }).catch(function(){
-            controller.logger.error("/list: This space is not initalized. If you want my annoucements, message me directly.")
+            controller.logger.error(message.channel + ": /list: This space is not initalized. If you want my annoucements, message me directly.")
             bot.reply(message, "This space is not initalized. If you want my annoucements, message me directly.")
         });
 	});
 
 	//SUBSCRIBE
 	controller.hears(['^\/subscribe'], 'direct_mention', function (bot, message) {
-        controller.logger.info("/subscribe");
+        controller.logger.info(message.channel + ": /subscribe");
         isPublisher(message, controller.storage).then(function() {
+            controller.logger.info(message.channel + ": /subscribe: Message from publisher space");
     		sparkUtils.isMessageFromModerator(message).then(function(moderator) {
-    			if (moderator) broadcast.subscribe(bot, message);
+    			if (moderator) {
+                    controller.logger.info(message.channel + ": /subscribe: Message from moderator");
+                    broadcast.subscribe(bot, message);
+                }
     		});
         }).catch(function(){
-            controller.logger.error("/subscribe: This space is not initalized. If you want my annoucements, message me directly.")
+            controller.logger.error(message.channel + ": /subscribe: This space is not initalized. If you want my annoucements, message me directly.")
             bot.reply(message, "This space is not initalized. If you want my annoucements, message me directly.")
         });
 	});
 
 	//UNSUBSCRIBE
 	controller.hears(['^\/unsubscribe'], 'direct_mention', function (bot, message) {
-        controller.logger.info("/unsubscribe");
+        controller.logger.info(message.channel + ": /unsubscribe");
         isPublisher(message, controller.storage).then(function() {
     		sparkUtils.isMessageFromModerator(message).then(function(moderator) {
     			if (moderator) broadcast.unsubscribe(bot, message);
     		});
         }).catch(function(){
-            controller.logger.error("/unsubscribe: This space is not initalized. If you want my annoucements, message me directly.")
+            controller.logger.error(message.channel + ": /unsubscribe: This space is not initalized. If you want my annoucements, message me directly.")
             bot.reply(message, "This space is not initalized. If you want my annoucements, message me directly.")
         });
 	});
 
 	//STATS
 	controller.hears(['^\/stats'], 'direct_mention', function (bot, message) {
-        controller.logger.info("/stats");
+        controller.logger.info(message.channel + ": /stats");
         isPublisher(message, controller.storage).then(function() {
     		broadcast.stats(bot, message);
         }).catch(function(){
-            controller.logger.error("/stats: This space is not initalized. If you want my annoucements, message me directly.")
+            controller.logger.error(message.channel + ": /stats: This space is not initalized. If you want my annoucements, message me directly.")
             bot.reply(message, "This space is not initalized. If you want my annoucements, message me directly.")
         });
 	});
 
 	//INIT
 	controller.hears(['^\/setup'], 'direct_mention', function (bot, message) {
+        controller.logger.info(message.channel + ": /setup");
         if (process.env.bot_admin && (process.env.bot_admin.toLowerCase().indexOf(message.user.trim().toLowerCase()) > -1)) {
             sparkUtils.isSpaceLocked(message).then(function(response) {
                 if (response == true)
@@ -163,34 +168,34 @@ module.exports = function(controller, limiter) {
 
 	//LOAD RESPONSES
 	controller.hears(['^\/loadResponses'], 'direct_mention', function (bot, message) {
-        controller.logger.info("/loadResponses");
+        controller.logger.info(message.channel + ": /loadResponses");
         isPublisher(message, controller.storage).then(function() {
     		sparkUtils.isMessageFromModerator(message).then(function(moderator) {
     			if (moderator) broadcast.loadResponse(bot, message);
     		});
         }).catch(function(){
-            controller.logger.error("/loadResponses: This space is not initalized. If you want my annoucements, message me directly.")
+            controller.logger.error(message.channel + ": /loadResponses: This space is not initalized. If you want my annoucements, message me directly.")
             bot.reply(message, "This space is not initalized. If you want my annoucements, message me directly.")
         });
 	});
 
 	//TEST
 	controller.hears(['^\/test'], 'direct_mention', function (bot, message) {
-        controller.logger.info("/test");
+        controller.logger.info(message.channel + ": /test");
         isPublisher(message, controller.storage).then(function() {
             sparkUtils.isMessageFromModerator(message).then(function(moderator) {
-                console.log("Test request from moderator: " + moderator);
-    		    if (moderator) broadcast.publish(bot, message, true);
+                controller.logger.info("Test request from moderator: " + moderator);
+    		    if (moderator) broadcast.publish(bot, message, 1, true);
             });
         }).catch(function(){
-            controller.logger.error("/test: This space is not initalized. If you want my annoucements, message me directly.")
+            controller.logger.error(message.channel + ": /test: This space is not initalized. If you want my annoucements, message me directly.")
             bot.reply(message, "This space is not initalized. If you want my annoucements, message me directly.")
         });
 	});
     
 	//TEST
 	controller.hears(['^\/help'], 'direct_mention', function (bot, message) {
-        controller.logger.info("/help");
+        controller.logger.info(message.channel + ": /help");
         isPublisher(message, controller.storage).then(function() {
             var text = "You can use the following commands:";
             sparkUtils.isMessageFromModerator(message).then(function(moderator) {
@@ -209,7 +214,7 @@ module.exports = function(controller, limiter) {
                 bot.reply(message, text);
             });
         }).catch(function(){
-            controller.logger.error("/help: This space is not initalized. If you want my annoucements, message me directly.")
+            controller.logger.error(message.channel + ": /help: This space is not initalized. If you want my annoucements, message me directly.")
             bot.reply(message, "This space is not initalized. If you want my annoucements, message me directly.")
         });
 	});

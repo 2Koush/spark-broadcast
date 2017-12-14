@@ -8,7 +8,8 @@ var cleanArray = function(array, deleteValue) {
       i--;
     }
   }
-  return this;
+  console.log(array);
+  return array;
 };
 
 

@@ -25,7 +25,7 @@ SparkUtils.prototype.isMessageFromModerator = function(message) {
         console.log(message.channel);
         console.log(message.user);
 		spark.memberships.list({roomId: message.channel, personEmail: message.user}).then(function(membershipInfo) {
-            console.log(membershipInfo);
+            console.log(membershipInfo.items);
 			var response = false;
 			if (membershipInfo && (membershipInfo.items.length == 1))
                 response = membershipInfo.items[0].isModerator;
