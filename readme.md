@@ -17,32 +17,34 @@ There are a few steps to get started on working on a Broadcast Bot:
 
 Clone this repository:
 
-`git clone https://github.com/howdyai/botkit-starter-ciscospark.git`
+`git clone https://github.com/2Koush/spark-broadcast.git`
 
 Install dependencies:
 
 ```
-cd broadcast-ciscospark
+cd spark-broadcast
 npm install
 ```
 
-#### Set up your Cisco Spark Application 
-Once you have setup your Botkit developer enviroment, the next thing you will want to do is set up a new Cisco Spark application via the [Cisco Spark developer portal](https://developer.ciscospark.com/). This is a multi-step process, but only takes a few minutes. 
+Update the `.env` file with your bot details.
 
-[Read this step-by-step guide](https://github.com/howdyai/botkit/blob/master/docs/provisioning/cisco-spark.md) to make sure everything is set up. 
+#### Dockerize: 
 
-Next, get a Botkit Studio token [from your Botkit developer account](https://studio.botkit.ai/) if you have decided to use Studio. 
+This kit includes a Dockerfile. If you have docker installed, and want to create a docker image execute:
 
-Update the `.env` file with your newly acquired tokens.
+```
+docker build -t <tagname>
+```
+
+#### Execute: 
 
 Launch your bot application by typing:
 
 `node .`
 
-Cisco Spark requires your application be available at an SSL-enabled endpoint. To expose an endpoint during development, we recommend using [localtunnel.me](http://localtunnel.me) or [ngrok](http://ngrok.io), either of which can be used to temporarily expose your bot to the internet. Once stable and published to the real internet, use nginx or another web server to provide an SSL-powered front end to your bot application. 
+### Watson Conversation
 
-Now comes the fun part of [making your bot!](https://github.com/howdyai/botkit/blob/master/docs/readme.md#basic-usage)
-
+For this to kit to work, we need the Watson connversation working. Also, when updating the .env you would have been asked for your IBM Watson Conversation service details. Refer to the attached `watson.json` file and use it as a template for all requierd intents and entities. You can upload this json to your Watson workspace to easily get started.
 
 ### Extend This Starter Kit
 
@@ -50,7 +52,6 @@ This kit is designed to provide developers a robust starting point customizing a
 
 Feel free to enhnce the code to add more capabilities and features to this bot.
 
-### Customize Storage
 
 ###  Need more help?
 
