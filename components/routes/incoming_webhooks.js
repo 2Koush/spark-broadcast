@@ -12,9 +12,12 @@ module.exports = function(webserver, controller) {
         res.send('ok');
 
         var bot = controller.spawn({});
-
-        // Now, pass the webhook into be processed
-        controller.handleWebhookPayload(req, res, bot);
+	if (bot && bot.botkit && bot.botkit.identity) {
+        	if (bot.botkit.identity.id != req.body.data.personId) {
+        		// Now, pass the webhook into be processed
+        		controller.handleWebhookPayload(req, res, bot);
+		}
+        }
 
     });
 

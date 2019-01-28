@@ -50,14 +50,15 @@ var cleanCommand = function(message) {
 /*
 Helper Function: Prepare a notification object ready for mongoDB.
 */
-var createNotificationItem = function(message, content, isHide) {
+var createNotificationItem = function(message, content, isHide, broadcastTo) {
     return notification = {
         id: message.original_message.id,
         content: content,
         sender: message.user,
         timestamp: utils.getTime(),
         hide: isHide,
-        publisher_space_id: message.channel
+        publisher_space_id: message.channel,
+        publishTo: broadcastTo
     };
 }
 
@@ -99,7 +100,7 @@ var getAllDefaultPublishers = function(bot, message) {
 
 
 var getTotalSubscribers = function(bot, message) {
-    console.log("getTotalSubscribers");
+    logMessage("getTotalSubscribers");
     var users = {
         'count': 0,
         'shouldWait': false
@@ -115,11 +116,11 @@ var getTotalSubscribers = function(bot, message) {
             }]
         };
         storage.subscribers.find(subscriberQuery, function(error, subscribers) {
-            //console.log(subscribers);
+            //logMessage(subscribers);
             extractEmailOfSubscribers(subscribers).then(function(userList) {
                 users.external = userList;
             });
-            console.log("getTotalSubscribers: External Complete");
+            logMessage("getTotalSubscribers: External Complete");
 
             subscriberQuery = {
                 $and: [{
@@ -131,10 +132,10 @@ var getTotalSubscribers = function(bot, message) {
                 }]
             };
             storage.subscribers.find(subscriberQuery, function(error, subscribers) {
-                //console.log(subscribers);
+                //logMessage(subscribers);
                 extractEmailOfSubscribers(subscribers).then(function(userList) {
                     users.internal = userList;
-                    console.log(users);
+                    logMessage(users);
                     users.count = 0;
                     if (users.internal) users.count = users.internal.length;
                     else users.internal = [];
@@ -150,7 +151,7 @@ var getTotalSubscribers = function(bot, message) {
                     }
                     fulfill(users);
                 });
-                console.log("getTotalSubscribers: Internal");
+                logMessage("getTotalSubscribers: Internal");
             });
         });        
     });
@@ -187,6 +188,7 @@ var saveSubscriberItem = function(subscriberSpaceId, publisherSpaceId, email, ac
             emails: mailids
         };
         log.info(subscriber);
+        logMessage("Subscriber: " + subscriber);
         storage.subscribers.save(subscriber);
     });
 }
@@ -195,6 +197,7 @@ var updatePublisher = function(email, publisherSpaceId) {
     storage.subscribers.find({"emails": email.trim().toLowerCase()}, function(error, subscribers) {
         if (!utils.isEmpty(subscribers)) {
             log.debug("subscriptionStatus: %s", JSON.stringify(subscribers));
+            logMessage("subscriptionStatus: " + JSON.stringify(subscribers));
             var publisherSpaces = subscribers[0].publisher_space_ids;
             publisherSpaces.push(publisherSpaceId);
             var subscriber = {
@@ -203,6 +206,7 @@ var updatePublisher = function(email, publisherSpaceId) {
                 emails: subscribers[0].emails
             };
             log.info(subscriber);
+            logMessage("updatePublisher" + subscriber);
             storage.subscribers.save(subscriber);
         }
     });
@@ -215,7 +219,8 @@ var subscriptionStatus = function(channel, userid) {
     var response = {"status": NOT_IN_DB, "subscriberRecord": undefined}; 
 
     return new Promise(function(fulfill, reject) {
-        log.info("subscriptionStatus: %s", userid.trim().toLowerCase())
+        log.info("subscriptionStatus: %s", userid.trim().toLowerCase());
+        logMessage("subscriptionStatus: " + userid.trim().toLowerCase());
         storage.subscribers.find({"emails": userid.trim().toLowerCase()}, function(error, subscribers) {
             if (!utils.isEmpty(subscribers)) {
                 log.debug("subscriptionStatus: %s", JSON.stringify(subscribers));
@@ -225,6 +230,7 @@ var subscriptionStatus = function(channel, userid) {
                     response = {"status": IN_DB_NOT_SUBSCRIBED, "subscriberRecord": subscribers[0]};
             }
             log.info("subscriptionStatus: %s", JSON.stringify(response));
+            logMessage("subscriptionStatus: " + JSON.stringify(response));
             fulfill(response);
         });
     });
@@ -232,14 +238,15 @@ var subscriptionStatus = function(channel, userid) {
 
 //Checks if the job is complete
 var jobComplete = function(broadcastStartTime, action) {
-    log.info("%s: jobComplete - %s", broadcastStartTime, action)
+    log.info("%s: jobComplete - %s", broadcastStartTime, action);
+    logMessage(broadcastStartTime + ": jobComplete - " + action);
     var currentJob = job[broadcastStartTime];
     if ((currentJob.items.length === 0) && Promise.all(currentJob.pArr) && (currentJob.pArr.length >= currentJob.numItems)) {
         if (currentJob.timeout) {
             clearInterval(currentJob.timeout);
         }
         log.info("%s: Completed: %s %s messages in %ss", broadcastStartTime, action, currentJob.pArr.length, ((utils.getTime() - broadcastStartTime) / 1000));
-        console.log("%s: Completed: %s %s messages in %ss", broadcastStartTime, action, currentJob.pArr.length, ((utils.getTime() - broadcastStartTime) / 1000));
+        logMessage(broadcastStartTime + ": Completed: " +  action + " " + currentJob.pArr.length + " messages in " + ((utils.getTime() - broadcastStartTime) / 1000) + "s");
         currentJob.pArr = [];
         currentJob.callback(broadcastStartTime, action);
     }
@@ -248,23 +255,32 @@ var jobComplete = function(broadcastStartTime, action) {
 //Delete 1 message
 var deleteMessage = function(broadcastStartTime, item) {
     log.info("%s: deleteMessage - %s", broadcastStartTime, item);
-    console.log("%s: deleteMessage - %s", broadcastStartTime, item);
+    logMessage("%s: deleteMessage - %s", broadcastStartTime, item);
     var currentJob = job[broadcastStartTime];
     controller.api.messages.remove(item).then(function() { //DELETE MESSAGE
         currentJob.completed.push(item.toPersonEmail);
         currentJob.pArr.push('S' + currentJob.success++);
         jobComplete(broadcastStartTime, "Deleted");
     }).catch(function(err) {
-        console.log(err);
+        logMessage(err);
         currentJob.pArr.push('E' + currentJob.error++);
         if (err.statusCode === 429) { //RATE-LIMT. So willTill => retry-after (plus a 2s safety == Being nice to Spark)
             log.error('%s rate limit error \n%s', item, JSON.stringify(err.headers));
-            if (currentJob.waitTill > utils.getTime()) currentJob.waitTill += (parseInt(err.headers["retry-after"]) * 1000);
-            else currentJob.waitTill = (utils.getTime() + (parseInt(err.headers["retry-after"]) * 1000) + 2000);
+            logMessage(item + ' rate limit error \n' + JSON.stringify(err.headers));
+            var retryAfter = 30000;
+            if (err.headers["retry-after"] != undefined) {
+                retryAfter = parseInt(err.headers["retry-after"]) * 1000;
+            } else {
+                logMessage("deleteMessage: ERROR: retry-after is MISING.\n" + JSON.stringify(err.headers));
+            }
+            if (currentJob.waitTill > utils.getTime()) currentJob.waitTill += retryAfter;
+            else currentJob.waitTill = (utils.getTime() + retryAfter + 2000);
             currentJob.items.push(item); //RETRY
             currentJob.numItems++;
         } else {
             log.error('%s had a %s error \n%s', item, err.statusCode, JSON.stringify(err));
+            logMessage(item + "had a %s error: ");
+            logMessage(JSON.stringify(err));
         }
         jobComplete(broadcastStartTime, "Deleted");
     })
@@ -273,6 +289,7 @@ var deleteMessage = function(broadcastStartTime, item) {
 //Send 1 message
 var sendMessage = function(broadcastStartTime, msg, person, isSubscribe, subscriberRecord=undefined) {
     //log.info("%s: sendMessage - %s", broadcastStartTime, person)
+    logMessage(broadcastStartTime + ": sendMessage to - " + person);
     var currentJob = job[broadcastStartTime];
     controller.api.messages.create({ //SEND MESSAGE
         markdown: msg,
@@ -281,25 +298,33 @@ var sendMessage = function(broadcastStartTime, msg, person, isSubscribe, subscri
         currentJob.completed.push(response);
         if (isSubscribe) { //SUBSCRIBE
             saveSubscriberItem(response.roomId, currentJob.publisherId, person, 'subscribe', subscriberRecord);
-            log.info("%s: Subscribe %s to DB, Publisher = %s", broadcastStartTime, person, currentJob.publisherId)
-            currentJob.pArr.push('S' + currentJob.success++)
-            jobComplete(broadcastStartTime, "Subscribed")
+            log.info("%s: Subscribe %s to DB, Publisher = %s", broadcastStartTime, person, currentJob.publisherId);
+            logMessage(broadcastStartTime + ": Subscribe " +  person + " to DB, Publisher = " + currentJob.publisherId);
+            currentJob.pArr.push('S' + currentJob.success++);
+            jobComplete(broadcastStartTime, "Subscribed");
         } else { //PUBLISH
-            currentJob.pArr.push('S' + currentJob.success++)
-            jobComplete(broadcastStartTime, "Published")
+            currentJob.pArr.push('S' + currentJob.success++);
+            jobComplete(broadcastStartTime, "Published");
         }
     }).catch(function(err) {
-        currentJob.pArr.push('E' + currentJob.error++)
+        currentJob.pArr.push('E' + currentJob.error++);
         if (err.statusCode === 429) { //RATE-LIMT. So willTill => retry-after (plus a 2s safety == Being nice to Spark)
-            //console.log(msg + ' rate limit error \n' + JSON.stringify(err.headers))
+            logMessage(broadcastStartTime + ': sendMessage - ' + msg + ' - rate limit error \n' + JSON.stringify(err.headers));
             log.error('%s: sendMessage - %s rate limit error %s', broadcastStartTime, msg, JSON.stringify(err.headers));
-            if (currentJob.waitTill > utils.getTime()) currentJob.waitTill += (parseInt(err.headers["retry-after"]) * 1000);
-            else currentJob.waitTill = (utils.getTime() + (parseInt(err.headers["retry-after"]) * 1000) + 2000);
-            currentJob.items.push(person) //RETRY
-            currentJob.numItems++
-            currentJob.completed.push("")
+            var retryAfter = 30000;
+            if (err.headers["retry-after"] != undefined) {
+                retryAfter = parseInt(err.headers["retry-after"]) * 1000;
+            } else {
+                logMessage("sendMessage: ERROR: retry-after is MISING.\n" + JSON.stringify(err.headers));
+            }
+            if (currentJob.waitTill > utils.getTime()) currentJob.waitTill += retryAfter;
+            else currentJob.waitTill = (utils.getTime() + retryAfter + 2000);
+            currentJob.items.push(person); //RETRY
+            currentJob.numItems++;
+            currentJob.completed.push("");
         } else {
             log.error('%s had a %s error \n%s', msg, err.statusCode, JSON.stringify(err));
+            logMessage(broadcastStartTime + ": " + msg + " had a " + err.statusCode + " error \n" + JSON.stringify(err));
             if (err.statusCode === 404) { 
                 currentJob.completed.push("Unable to find " + person);
             } else {
@@ -313,33 +338,36 @@ var sendMessage = function(broadcastStartTime, msg, person, isSubscribe, subscri
 
 //Handle 1 subscribe or unsubscribe
 var manageSubscription = function(broadcastStartTime, msg, person, isSubscribe) {
-    console.log("%s: manageSubscription - %s", broadcastStartTime, person)
+    logMessage(broadcastStartTime + ": manageSubscription - " + person)
     var currentJob = job[broadcastStartTime];
     subscriptionStatus(currentJob.publisherId, person).then(function(response){
         if (isSubscribe) {     //ACTION TO SUBSCRIBE
             if (response.status<IN_DB_SUBSCRIBED) {
                 if (response.status == NOT_IN_DB)
                     allSubscriberEmails.push(person);
-                //console.log("manageSubscription: " + JSON.stringify(response.subscriberRecord))
+                //logMessage("manageSubscription: " + JSON.stringify(response.subscriberRecord))
                 sendMessage(broadcastStartTime, msg, person, isSubscribe, response.subscriberRecord);
             } else {
-                currentJob.completed.push(person + " is already subscribed")
-                log.info("%s: %s is already subscribed to this publisher", broadcastStartTime, person)
+                currentJob.completed.push(person + " is already subscribed");
+                log.info("%s: %s is already subscribed to this publisher", broadcastStartTime, person);
+                logMessage(broadcastStartTime + ": " + person + " is already subscribed to this publisher");
                 currentJob.pArr.push('E' + currentJob.error++)
                 jobComplete(broadcastStartTime, "Subscribed")
             }
         } else {                    //ACTION TO UNSUBSCRIBE
             if (response.status == IN_DB_SUBSCRIBED) {
                 saveSubscriberItem(response.subscriberRecord.id, currentJob.publisherId, person, 'unsubscribe', response.subscriberRecord);
-                log.info("%s: Unsubscribe %s from DB, Publisher = %s", broadcastStartTime, person, currentJob.publisherId)
+                log.info("%s: Unsubscribe %s from DB, Publisher = %s", broadcastStartTime, person, currentJob.publisherId);
+                logMessage(broadcastStartTime + ": Unsubscribe " + person + "from DB, Publisher = " + currentJob.publisherId);
                 currentJob.pArr.push('S' + currentJob.success++)
                 currentJob.completed.push("")
                 jobComplete(broadcastStartTime, "Unsubscribed")                
             } else {
                 currentJob.pArr.push('S' + currentJob.error++)
-                log.info("%s: %s is not subscribed to this publisher", broadcastStartTime, person)
-                currentJob.completed.push(person + " is not subscribed to this publisher")
-                jobComplete(broadcastStartTime, "Unsubscribed")  
+                log.info("%s: %s is not subscribed to this publisher", broadcastStartTime, person);
+                logMessage(broadcastStartTime + ": " + person + " is not subscribed to this publisher");
+                currentJob.completed.push(person + " is not subscribed to this publisher");
+                jobComplete(broadcastStartTime, "Unsubscribed");
             }
         }
     })
@@ -347,26 +375,32 @@ var manageSubscription = function(broadcastStartTime, msg, person, isSubscribe) 
 
 //Call worker function to send a message, delete a message, subscribe or unsubscribe a user
 var controlledBroadcast = function(broadcastStartTime, action) {
-    console.log("controlledBroadcast: " + action);
+    //logMessage("controlledBroadcast: " + action);
     var currentJob = job[broadcastStartTime];
-    //console.log(currentJob);
+    //logMessage(currentJob);
     if ((currentJob.items.length > 0) && (currentJob.waitTill <= utils.getTime())) {
-        console.log(currentJob.items.length);
+        logMessage("Pending Tasks: " + currentJob.items.length);
         limiter.removeTokens(1, function(err, remainingRequests) {
             if (remainingRequests >= 1) {
                 if (action == "publish") {
                     sendMessage(broadcastStartTime, currentJob.message, currentJob.items.shift(), false);
                 } else if (action == "subscribe") {
-                    console.log("controlledBroadcast: manageSubscription");
+                    logMessage("controlledBroadcast: manageSubscription");
                     manageSubscription(broadcastStartTime, currentJob.message, currentJob.items.shift(), true);
                 } else if (action == "unsubscribe") {
                     manageSubscription(broadcastStartTime, currentJob.message, currentJob.items.shift(), false);
                 } else if (action == "kill") {
-                    console.log(currentJob.items);
+                    logMessage(currentJob.items);
                     deleteMessage(broadcastStartTime, currentJob.items.shift());
                 }
             }
         });
+    } else {
+        if (currentJob.items.length > 0) {
+            logMessage("controlledBroadcast: " + action + ": WaitTill..." + (currentJob.waitTill - utils.getTime()) + "ms.");
+        } else {
+            logMessage("controlledBroadcast: " + action + ": No more jobs...");
+        }
     }
 }
 //////////////// END CORE BROADCAST /////////////////////
@@ -375,13 +409,13 @@ var subscriptionsCommandTriggered = function(bot, message, action) {
     var userList = [];
     var welcomeTxt = "";
     var admin_command = false;
-    console.log(message.match[0]);
+    logMessage(message.match[0]);
     if (message.match[0].startsWith("/")) admin_command = true;
-    console.log(admin_command);
+    logMessage(admin_command);
 
     var buildUserList = function() {
         var messageParams = cleanCommand(message);
-        console.log(messageParams);
+        logMessage(messageParams);
         return new Promise(function(fulfill, reject) {
             if (admin_command) {
                 if (utils.isEmpty(message.original_message.files) && utils.isEmpty(messageParams.data)) {
@@ -395,11 +429,19 @@ var subscriptionsCommandTriggered = function(bot, message, action) {
                         userList = userList.filter(function(entry) {
                             return entry.trim() != '';
                         });
-                        log.info("User List before Cleanup: \n%s", userList)
+                        log.info("User List before Cleanup: \n%s", userList);
+                        logMessage("User List before Cleanup: \n" + JSON.stringify(userList));
                         userList = userList.map(function(x){if(utils.validateEmail(x)) return x.toLowerCase().trim()});
+                        userList = userList.filter(function(elem){
+                            if ((elem.toLowerCase().indexOf("@sparkbot.io")==-1) &&
+                                (elem.toLowerCase().indexOf("@webex.bot")==-1))
+                                return elem.toLowerCase().trim()
+                            });
+                    
                         //userList.clean(undefined)
                         utils.cleanArray(userList, undefined);
                         log.info("User List after Cleanup: \n%s", userList);
+                        logMessage("User List after Cleanup: \n" + JSON.stringify(userList));
                         fulfill(userList);
                     });
             } else {
@@ -414,13 +456,13 @@ var subscriptionsCommandTriggered = function(bot, message, action) {
 
     var broadcastStartTime = 0;
     buildUserList().then(function(userList) {
-        console.log(userList);
+        logMessage(userList);
         if (!utils.isEmpty(userList)) {
             broadcastStartTime = utils.getTime();
             var taskComplete = function(broadcastStartTime, action) {
                 var currentJob = job[broadcastStartTime];
-                console.log("%s: Subscriptions taskComplete", broadcastStartTime);
-                console.log(currentJob);
+                logMessage(broadcastStartTime + ": Subscriptions taskComplete");
+                logMessage(JSON.stringify(currentJob));
                 var text = "Done. I " + action + " " + currentJob.numItems + " users";
                 //if (currentJob.error > 0) text += " with " + currentJob.error + " errors<br>" + currentJob.completed.clean('')
                 if (currentJob.error > 0) {
@@ -433,7 +475,7 @@ var subscriptionsCommandTriggered = function(bot, message, action) {
                 bot.reply(message, text);
             }
 
-            console.log(userList);
+            logMessage(JSON.stringify(userList));
             job[broadcastStartTime] = {
                 'publisherId': message.channel,
                 'message': welcomeTxt,
@@ -455,7 +497,7 @@ var subscriptionsCommandTriggered = function(bot, message, action) {
                 'waitComplete': false,
                 'isTest': false
             };
-            console.log("%s: Starting Subscribe", broadcastStartTime);
+            logMessage("%s: Starting Subscribe", broadcastStartTime);
             job[broadcastStartTime].timeout = setInterval(controlledBroadcast, (1000 / process.env.bot_messagesPerSecond), broadcastStartTime, action);
         }
     });
@@ -465,7 +507,7 @@ var subscriptionsCommandTriggered = function(bot, message, action) {
 var SparkBroadcast = function() {};
 
 SparkBroadcast.prototype.cleanMessage = function(bot, message) {
-    console.log(message.text);
+    logMessage(message.text);
     var mention = '<spark-mention data-object-type="person" data-object-id="' + bot.botkit.identity.id + '">.+</spark-mention>';
 
     var removeRegex = new RegExp('^\\s*(</?[^>]+>\\s*)*(' + mention + '\\s*)?(</?[^>]+>\\s*)*' + message.match[0] + '(\\s*</p>\\s*<p>)?\\s*(<br/?>\\s*)*');
@@ -542,10 +584,10 @@ Subscribe the user to all default channels to get future notifications.
 SparkBroadcast.prototype.userSubscribe = function(bot, message) {
     log.info("%s: SparkBroadcast: userSubscribe", message.user);
     storage.publishers.find({"is_default": true}, function(error, publishers) {
-        console.log(publishers);
+        logMessage(publishers);
         if (!utils.isEmpty(publishers)) {
             subscriptionStatus("", message.user).then(function(userStatus) {
-                console.log(userStatus);
+                logMessage(userStatus);
                 if (userStatus.status == IN_DB_SUBSCRIBED) {
                     for (i=0; i<publishers.length; i++) {
                         saveSubscriberItem(message.channel, publishers[0].id, message.user, 'subscribe', userStatus.subscriberRecord);
@@ -568,7 +610,7 @@ SparkBroadcast.prototype.userSubscribe = function(bot, message) {
 Subscribe the user to get future notifications.
 /*/
 SparkBroadcast.prototype.subscribe = function(bot, message) {
-    console.log("SparkBroadcast: subscribe");
+    logMessage("SparkBroadcast: subscribe");
     log.info("SparkBroadcast: subscribe");
     subscriptionsCommandTriggered(bot, message, 'subscribe');
 }
@@ -579,8 +621,9 @@ Unsubscribe the user to all channels to prevent getting future notifications.
 /*/
 SparkBroadcast.prototype.userUnsubscribe = function(bot, message) {
     log.info("%s: SparkBroadcast: userUnsubscribe", message.user);
+    logMessage(message.user + ": SparkBroadcast: userUnsubscribe");
     subscriptionStatus("", message.user).then(function(userStatus) {
-        console.log(userStatus);
+        logMessage(userStatus);
         if (userStatus.status != NOT_IN_DB) {
             var subscriber = {
                 id: message.channel,
@@ -607,19 +650,20 @@ Publish the notifications from the requested channel to all subscribers.
 /*/
 SparkBroadcast.prototype.publish = function(bot, message, broadcastTo, isTest) {
     log.info("%s: SparkBroadcast: publish", message.channel);
-    console.log("publish")
+    logMessage(message.channel + ": SparkBroadcast: publish")
     var content = this.cleanMessage(bot, message);
-    console.log(content);
+    logMessage(content);
     var broadcastStartTime = 0;
     var broadcastRunTime = 0;
     var sentMessages = [];
     var totalSubscribers = 0;
-    console.log(broadcastTo);
+    logMessage("Broadcast to: " + broadcastTo);
 
     // any subscribers
     getTotalSubscribers(bot, message).then(function(users) {
-        //console.log(users);
-        log.info("broadcast /publish getTotalSubscribers: " + users.count)
+        //logMessage(users);
+        log.info("broadcast /publish getTotalSubscribers: " + users.count);
+        logMessage("broadcast /publish getTotalSubscribers: " + users.count);
         if (users.count > 0) {
             if (isTest) {
                 //For a test run, we will publish the message in the publisher space and to the sender
@@ -654,14 +698,25 @@ SparkBroadcast.prototype.publish = function(bot, message, broadcastTo, isTest) {
                 users.external = [];
                 users.shouldWait = false;
             }
-            console.log(users);
+            logMessage(JSON.stringify(users));
+
+            /*Un-comment this code and execute Fabian publish again, to skip X number of users and start publishing to the rest.
+            This needs to un-commened only when a previous publish fails mid way. For example if a message was sent to 64 people
+            and then failed, the below code ignores the first 64 people and then sends it to the rest.
+            */
+            /*if (users.internal.length > 64) {
+                users.internal = users.internal.splice(64);
+                users.count = users.count - 64;
+            }*/
 
             var progress = function(broadcastStartTime) {
                 log.info("%s: progress: ", broadcastStartTime);
+                logMessage(broadcastStartTime + ": progress");
                 var currentJob = job[broadcastStartTime];
                 if (currentJob && !currentJob.killed) {
                     var sentCount = currentJob.completed.length;
                     log.info("%s: progress: Sent=%s",broadcastStartTime, sentCount);
+                    logMessage(broadcastStartTime + ": progress: Sent=" + sentCount);
                     if (sentCount > 0) {
                         var currentTime = utils.getTime();
                         var timeElapsedWaiting = 0;
@@ -673,52 +728,64 @@ SparkBroadcast.prototype.publish = function(bot, message, broadcastTo, isTest) {
                         var hitRate = timeElapsed / sentCount;
                         timeElapsed = utils.convertToMinutes(timeElapsed);
                         log.info("%s: progress: Total=%s",broadcastStartTime, currentJob.totalNumItems);
+                        logMessage(broadcastStartTime + ": progress: Total=" + currentJob.totalNumItems);
                         var pendingPublishes = currentJob.totalNumItems - sentCount;
                         var timeLeft = utils.convertToMinutes(hitRate * pendingPublishes);
                         var percentComplete = Math.round((sentCount / currentJob.totalNumItems) * 10000) / 100;
                         log.info("%s: progress: Percent Complete=%s",broadcastStartTime, percentComplete);
-                        log.info("%s: progress: Time timeElapsedWaiting=%s",broadcastStartTime, timeElapsedWaiting);
+                        logMessage(broadcastStartTime + ": progress: Percent Complete=" + percentComplete);
+                        log.info("%s: progress: Time timeElapsedWaiting=",broadcastStartTime, timeElapsedWaiting);
+                        logMessage(broadcastStartTime + ": progress: Time timeElapsedWaiting=" + timeElapsedWaiting);
                         //if ((percentComplete < 100) && (!currentJob.isTest)) {
                         if (percentComplete < 100) {
                             var text = "**" + percentComplete + "%** complete: **";
                             text += sentCount + "** sent in **" + timeElapsed;
                             text += "** minutes and **" + pendingPublishes;
                             text += "** left to send in approximately **" + timeLeft + "** minutes";
-                            log.info("%s: progress: %s", broadcastStartTime, text)
+                            log.info("%s: progress: %s", broadcastStartTime, text);
+                            logMessage(broadcastStartTime + ": progress: " + text);
                             bot.reply(message, text);
-                        } else if (percentComplete === 100)
-                            deleteJob(broadcastStartTime)
+                        } else if (percentComplete === 100) {
+                            logMessage(broadcastStartTime + ": percentComplete is " + percentComplete + "/100. Deleting the job.");
+                            deleteJob(broadcastStartTime);
+                        }
                     }
                 } else if (currentJob && currentJob.killed && ((utils.getTime() - broadcastStartTime) > 3600000)) {
-                    log.info("%s: progress: Ghost Progress ... Job is already killed but not deleted.", broadcastStartTime)
+                    log.info("%s: progress: Ghost Progress ... Job is already killed but not deleted.", broadcastStartTime);
+                    logMessage(broadcastStartTime + ": progress: Ghost Progress ... Job is already killed but not deleted.");
                     deleteJob(broadcastStartTime)
                 }
             }
 
             var finalStatus = function(broadcastStartTime) {
-                log.info("%s: finalStatus", broadcastStartTime)
-                if (job[broadcastStartTime].timeout_progress) clearInterval(job[broadcastStartTime].timeout_progress)
+                log.info("%s: finalStatus", broadcastStartTime);
+                logMessage(broadcastStartTime + ": finalStatus");
+                if (job[broadcastStartTime].timeout_progress) clearInterval(job[broadcastStartTime].timeout_progress);
                 if (!utils.isEmpty(job[broadcastStartTime]) && (job[broadcastStartTime].killed == false)) {
                     broadcastRunTime = utils.getTime() - broadcastStartTime;
                     if (users.shouldWait) 
                         broadcastRunTime -= utils.convertSecToMillis(process.env.bot_waitTime);
                     if (!isTest)
-                        storage.notifications.save(createNotificationItem(message, content, false));
+                        storage.notifications.save(createNotificationItem(message, content, false, broadcastTo));
                     bot.reply(message, "<@personId:" + message.original_message.personId + ">, All done. I sent **" + job[broadcastStartTime].totalNumItems + "** notifications in **" + utils.convertToMinutes(broadcastRunTime) + "** minutes");
                 }
-                deleteJob(broadcastStartTime)
-                log.info(job)
+                deleteJob(broadcastStartTime);
+                log.info(job);
+                logMessage(JSON.stringify(job));
             }
 
             var triggerExternalBroadcast = function(broadcastStartTime) {
-                log.info("%s: triggerExternalBroadcast", broadcastStartTime)
+                log.info("%s: triggerExternalBroadcast", broadcastStartTime);
+                logMessage(broadcastStartTime + ": triggerExternalBroadcast");
                 if (job[broadcastStartTime] && !job[broadcastStartTime].killed) {
                     job[broadcastStartTime].waitComplete = true;
                     job[broadcastStartTime].timeout_progress = setInterval(progress, (process.env.bot_progressUpdateTime * 1000), broadcastStartTime);
                     log.info("%s: Continuing broadcast to external domains.", broadcastStartTime)
+                    logMessage(broadcastStartTime + ": Continuing broadcast to external domains.");
                     bot.reply(message, "Continuing broadcast to external domains.");
                     job[broadcastStartTime].items = users.external.slice();
                     log.info("%s: Total External Users: %s", broadcastStartTime, job[broadcastStartTime].items.length);
+                    logMessage(broadcastStartTime + ": Total External Users: " + job[broadcastStartTime].items.length);
                     job[broadcastStartTime].numItems = users.external.length;
                     job[broadcastStartTime].success = 0;
                     job[broadcastStartTime].error = 0;
@@ -729,18 +796,21 @@ SparkBroadcast.prototype.publish = function(bot, message, broadcastTo, isTest) {
 
             var finalWarning = function(broadcastStartTime) {
                 log.info("%s: finalWarning", broadcastStartTime);
+                logMessage(broadcastStartTime + ": finalWarning");
                 if (job[broadcastStartTime] && !job[broadcastStartTime].killed) {
                     var text = "**Final Warning**: You have " + 
                         (Math.round((process.env.bot_waitTime / 240) * 100) / 100) + 
                         "m before the broadcast is sent to external users. You can stop the broadcast using **/kill/" + 
                         broadcastStartTime + "**";
                     log.info("%s: %s", broadcastStartTime, text);
+                    logMessage(broadcastStartTime + ": " + text);
                     bot.reply(message, text);
                 }
             }
 
             var internalBroadcastComplete = function(broadcastStartTime) {
                 log.info("%s: internalBroadcastComplete", broadcastStartTime);
+                logMessage(broadcastStartTime + ": internalBroadcastComplete");
                 if (job[broadcastStartTime].timeout_progress) clearInterval(job[broadcastStartTime].timeout_progress);
                 if (job[broadcastStartTime].numItems != job[broadcastStartTime].totalNumItems) {
                     var text = "Internal broadcast complete. Waiting for " + 
@@ -748,6 +818,8 @@ SparkBroadcast.prototype.publish = function(bot, message, broadcastTo, isTest) {
                         "m before sending to external domains. Use **/kill/" + 
                         broadcastStartTime + "** to stop this broadcast.";
                     log.info("%s: %s", broadcastStartTime, text);
+                    logMessage(broadcastStartTime + ": " + text);
+                    logMessage(job);
                     bot.reply(message, text);
                 }
                 if (users.shouldWait) {
@@ -756,14 +828,16 @@ SparkBroadcast.prototype.publish = function(bot, message, broadcastTo, isTest) {
                     job[broadcastStartTime].timeout_external = setTimeout(triggerExternalBroadcast, users.waitTime, broadcastStartTime);
                 } else {
                     log.info(broadcastStartTime + ": No external users ... calling finalStatus");
+                    logMessage(broadcastStartTime + ": No external users ... calling finalStatus");
                     finalStatus(broadcastStartTime);
                 }
             }
 
-            console.log("setting up the job");
+            logMessage("setting up the job");
             broadcastStartTime = utils.getTime();
             job[broadcastStartTime] = {
                 'publisherId': message.channel,
+                'publishTo': broadcastTo,
                 'message': content,
                 'items': users.internal.slice(),
                 'numItems': users.internal.length,
@@ -783,9 +857,10 @@ SparkBroadcast.prototype.publish = function(bot, message, broadcastTo, isTest) {
                 'waitComplete': false,
                 'isTest': isTest
             };
-            console.log(job[broadcastStartTime]);
+            logMessage(job[broadcastStartTime]);
             if (!isTest) bot.reply(message, "Use **/kill/" + broadcastStartTime + "** to stop this broadcast.");
-            log.info("%s: Starting Internal Broadcast", broadcastStartTime)
+            log.info("%s: Starting Internal Broadcast", broadcastStartTime);
+            logMessage(broadcastStartTime + ": Starting Internal Broadcast");
             job[broadcastStartTime].timeout = setInterval(controlledBroadcast, (1000 / process.env.bot_messagesPerSecond), broadcastStartTime, "publish");
             setTimeout(progress, 5000, broadcastStartTime); //10000
             job[broadcastStartTime].timeout_progress = setInterval(progress, utils.convertSecToMillis(process.env.bot_progressUpdateTime), broadcastStartTime);
@@ -799,13 +874,13 @@ SparkBroadcast.prototype.publish = function(bot, message, broadcastTo, isTest) {
 Kills the broadcast and recalls already sent announcements.
 /*/
 SparkBroadcast.prototype.kill = function(bot, message) {
-    console.log("Kill");
+    logMessage("Kill");
     var finalStatus = function(broadcastStartTime) {
-        storage.notifications.save(createNotificationItem(message, job[broadcastStartTime].message, true));
+        storage.notifications.save(createNotificationItem(message, job[broadcastStartTime].message, true, job[broadcastStartTime].publishTo));
         log.info("%s: Kill Complete.", broadcastStartTime);
-        console.log("%s: Kill Complete.", broadcastStartTime);
+        logMessage(broadcastStartTime + ": Kill Complete.");
         log.info(job);
-        //console.log(job);
+        logMessage(job);
         if (!utils.isEmpty(job[broadcastStartTime]) && (job[broadcastStartTime].killed == true)) {
             bot.reply(message, "<@personId:" + message.original_message.personId + ">, All done. Recalled **" + job[broadcastStartTime].completed.length + "** notifications");
         }
@@ -814,15 +889,15 @@ SparkBroadcast.prototype.kill = function(bot, message) {
 
     var recallMessages = function(broadcastStartTime) {
         if (!utils.isEmpty(job[broadcastStartTime])) {
-            console.log(job[broadcastStartTime].items);
-            console.log(job[broadcastStartTime].completed);
+            logMessage(job[broadcastStartTime].items);
+            logMessage(job[broadcastStartTime].completed);
             for (i = 0; i < job[broadcastStartTime].completed.length; i++)
                 job[broadcastStartTime].items[i] = job[broadcastStartTime].completed[i];
             job[broadcastStartTime].completed = [];
             job[broadcastStartTime].numItems = job[broadcastStartTime].items.length;
             job[broadcastStartTime].totalNumItems = job[broadcastStartTime].items.length;
             log.info("Starting recall of %s messages", job[broadcastStartTime].numItems);
-            console.log("Starting recall of %s messages", job[broadcastStartTime].numItems);
+            logMessage("Starting recall of " + job[broadcastStartTime].numItems + " messages");
             job[broadcastStartTime].timeout = setInterval(controlledBroadcast, (1000 / process.env.bot_messagesPerSecond), broadcastStartTime, "kill");
 
         }
@@ -835,9 +910,11 @@ SparkBroadcast.prototype.kill = function(bot, message) {
         if (!utils.isEmpty(messageParams) && (messageParams.length > 0)) {
             if (!utils.isEmpty(job[messageParams[1]])) {
                 log.info("%s is already killed.", messageParams[1]);
+                logMessage(messageParams[1] + " is already killed.");
                 var broadcastStartTime = messageParams[1];
                 if (job[broadcastStartTime].killed == false) {
                     log.info("Need to recall %s messages", job[broadcastStartTime].completed.length);
+                    log.info("Need to recall " + job[broadcastStartTime].completed.length + " messages");
                     job[broadcastStartTime].killed = true;
                     if (job[broadcastStartTime].timeout) clearInterval(job[broadcastStartTime].timeout);
                     if (job[broadcastStartTime].timeout_warning) clearInterval(job[broadcastStartTime].timeout_warning);
@@ -871,8 +948,14 @@ SparkBroadcast.prototype.list = function(bot, message, isDirect=false, numListin
     var response = "";
 
     var printNotification = function(publishers) {
-        console.log(publishers);
+        logMessage(publishers);
         // find notification into db
+        var publishFilter = {};
+        if (message.user.indexOf("@cisco.com") > 0) {
+            publishFilter = {$in: [0, 1]}
+        } else {
+            publishFilter = {$in: [0, 2]}
+        }
         var notificationItem = {
             $and: [{
                 "hide": false
@@ -880,6 +963,7 @@ SparkBroadcast.prototype.list = function(bot, message, isDirect=false, numListin
                 "publisher_space_id": { $in: publishers }
             }]
         };
+
         storage.notifications.find(notificationItem, function(error, notifications) {
             var numItems = (Object.keys(notifications).length >= numListing) ? numListing : Object.keys(notifications).length;
             notifications.sort(function(a, b) {
@@ -916,16 +1000,16 @@ Is the user subscribed?
 /*/
 SparkBroadcast.prototype.subscription_status = function(bot, message) {
     subscriptionStatus("", message.user).then(function(response) {
-        console.log(response);
+        logMessage(response);
         var result = 'status--notsubscribed';
         if ((response.status != NOT_IN_DB) && (response.subscriberRecord.publisher_space_ids.length > 0))
             result='status--subscribed';
-        console.log(result);
+        logMessage(result);
         var reply = botResponse.getResponse(result);
-        console.log(reply);
+        logMessage(reply);
         if ((reply != null)
             && (reply.trim().length > 0)) {
-            //console.log(reply);
+            //logMessage(reply);
             bot.reply(message, reply);
         }
     });
@@ -1189,4 +1273,7 @@ SparkBroadcast.prototype.initialize = function(ctrl, lmtr) {
 
 SparkBroadcast.prototype.test = function(controller, bot, message, storage) {}
 
+var logMessage = function(message) {
+    console.log(message);
+}
 module.exports = new SparkBroadcast();
