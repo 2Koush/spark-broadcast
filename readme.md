@@ -1,6 +1,6 @@
-# Broadcast Bot for Cisco Spark
+# Broadcast Bot for Cisco Webex Teams
 
-This repo contains everything you need to get started building a broadcast bot for Cisco Spark. It is built over the Botkit platform and also leverages the Cisco Spark Javascript SDK. This is designed to ease the process of designing and running your own broadcast bot. 
+This repo contains everything you need to get started building a broadcast bot for Cisco Webex Teams. It is built over the Botkit platform and also leverages the Cisco Webex Teams Javascript SDK. This is designed to ease the process of designing and running your own broadcast bot. 
 
 For those who are not familiar with bot, Bots are applications that can send and receive messages, and in many cases, appear alongside their human counterparts as users.
 
